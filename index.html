@@ -1,0 +1,1572 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>DDL // Fuga do Labirinto</title>
+<style>
+  :root{
+    --bg: #060a10;
+    --bg-1: #0b121b;
+    --bg-2: #101a26;
+    --panel: #0d1520;
+    --panel-2: #121d2b;
+    --wall: #3a5674;
+    --wall-border: #5a7fa0;
+    --border: #1c2b3a;
+    --border-soft: #16212e;
+    --cyan: #2fe6d6;
+    --cyan-dim: #1a8f86;
+    --cyan-glow: rgba(47,230,214,.35);
+    --green: #3ee08a;
+    --green-glow: rgba(62,224,138,.35);
+    --amber: #ffb454;
+    --amber-glow: rgba(255,180,84,.35);
+    --red: #ff5470;
+    --red-glow: rgba(255,84,112,.35);
+    --text: #dbe7f0;
+    --text-dim: #7d93a6;
+    --text-faint: #4b5c6b;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{
+    margin:0; padding:0; height:100%; background:var(--bg); color:var(--text);
+    font-family:var(--sans); overflow:hidden; overscroll-behavior:none;
+    -webkit-user-select:none; user-select:none;
+  }
+  body{
+    background:
+      radial-gradient(circle at 15% 8%, rgba(47,230,214,.06), transparent 40%),
+      radial-gradient(circle at 85% 92%, rgba(62,224,138,.05), transparent 45%),
+      var(--bg);
+  }
+  #app{ position:fixed; inset:0; display:flex; flex-direction:column; }
+
+  /* ---------- shared bits ---------- */
+  .screen{ position:absolute; inset:0; display:none; flex-direction:column; }
+  .screen.active{ display:flex; }
+
+  .brand{
+    font-family:var(--mono); letter-spacing:.14em; text-transform:uppercase;
+    color:var(--cyan); font-size:11px; font-weight:600;
+  }
+  .glow-cyan{ text-shadow:0 0 12px var(--cyan-glow); }
+
+  button{ font-family:inherit; cursor:pointer; }
+
+  .btn{
+    appearance:none; border:1px solid var(--border); background:var(--panel-2);
+    color:var(--text); padding:14px 18px; border-radius:12px; font-size:15px;
+    font-weight:600; display:flex; align-items:center; justify-content:center; gap:10px;
+    transition:transform .12s ease, border-color .12s ease, box-shadow .12s ease;
+  }
+  .btn:active{ transform:scale(.97); }
+  .btn-primary{
+    background:linear-gradient(180deg, rgba(47,230,214,.18), rgba(47,230,214,.06));
+    border-color:var(--cyan-dim); color:#eafffb;
+    box-shadow:0 0 0 1px rgba(47,230,214,.08) inset, 0 8px 24px -12px var(--cyan-glow);
+  }
+  .btn-primary:active{ box-shadow:0 0 0 1px rgba(47,230,214,.15) inset, 0 4px 14px -8px var(--cyan-glow); }
+  .btn-ghost{ background:transparent; border-color:var(--border); color:var(--text-dim); }
+  .btn-block{ width:100%; }
+  .btn-sm{ padding:9px 12px; font-size:13px; border-radius:9px; }
+
+  code, .mono{ font-family:var(--mono); }
+
+  /* ---------- MENU SCREEN ---------- */
+  #screen-menu{ align-items:center; justify-content:center; padding:22px; position:relative; overflow:hidden; }
+  #menu-matrix-canvas{
+    position:absolute; inset:0; width:100%; height:100%; opacity:.45;
+    -webkit-mask-image:radial-gradient(circle at 50% 38%, rgba(0,0,0,.15), rgba(0,0,0,.85) 75%);
+    mask-image:radial-gradient(circle at 50% 38%, rgba(0,0,0,.15), rgba(0,0,0,.85) 75%);
+  }
+  .menu-wrap{ position:relative; z-index:2; width:100%; max-width:420px; display:flex; flex-direction:column; gap:22px; }
+
+  .menu-hero{
+    border:1px solid var(--border); border-radius:18px; background:var(--panel);
+    padding:22px 18px 18px; position:relative; overflow:hidden;
+  }
+  .menu-hero::before{
+    content:""; position:absolute; inset:0; pointer-events:none; opacity:.5;
+    background-image:
+      linear-gradient(rgba(47,230,214,.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(47,230,214,.05) 1px, transparent 1px);
+    background-size:22px 22px;
+    mask-image:radial-gradient(circle at 30% 20%, black, transparent 70%);
+  }
+  .hero-top{ display:flex; align-items:center; justify-content:space-between; position:relative; }
+  .hero-dot{ width:8px; height:8px; border-radius:50%; background:var(--green); box-shadow:0 0 10px var(--green-glow); animation:pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{ opacity:1;} 50%{ opacity:.35; } }
+
+  .hero-title{
+    font-family:var(--mono); font-size:28px; line-height:1.15; font-weight:700;
+    margin:16px 0 6px; position:relative; letter-spacing:-.01em;
+  }
+  .hero-title .accent{ color:var(--cyan); }
+  .hero-sub{ position:relative; color:var(--text-dim); font-size:13.5px; line-height:1.5; margin:0 0 14px; }
+
+  .schema-strip{
+    position:relative; display:flex; gap:6px; overflow:hidden; padding:10px 0 2px;
+    border-top:1px dashed var(--border-soft);
+  }
+  .ddl-chip{
+    font-family:var(--mono); font-size:10.5px; padding:5px 8px; border-radius:6px;
+    border:1px solid var(--border); color:var(--text-dim); white-space:nowrap;
+  }
+  .ddl-chip b{ font-weight:700; }
+  .ddl-chip.c1 b{ color:var(--amber); }
+  .ddl-chip.c2 b{ color:var(--red); }
+  .ddl-chip.c3 b{ color:var(--green); }
+
+  .menu-actions{ display:flex; flex-direction:column; gap:10px; }
+  .menu-secondary{ display:flex; gap:10px; }
+  .menu-secondary .btn{ flex:1; }
+
+  .menu-footnote{ text-align:center; font-size:11px; color:var(--text-faint); font-family:var(--mono); }
+
+  /* ---------- GAME SCREEN ---------- */
+  #screen-game{ height:100%; }
+  .hud-top{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:calc(10px + env(safe-area-inset-top)) 14px 8px;
+    background:linear-gradient(180deg, rgba(6,10,16,.95), rgba(6,10,16,.75));
+    border-bottom:1px solid var(--border-soft); z-index:5;
+  }
+  .hud-btn{
+    width:42px; height:42px; border-radius:11px; border:1px solid var(--border);
+    background:var(--panel-2); color:var(--text); display:flex; align-items:center; justify-content:center;
+    font-size:18px; flex:0 0 auto;
+  }
+  .hud-timer{
+    font-family:var(--mono); font-size:clamp(15px, 4.6vw, 20px); font-weight:700; letter-spacing:.01em;
+    background:var(--panel-2); border:1px solid var(--border); border-radius:11px;
+    padding:8px 10px; color:var(--cyan); text-shadow:0 0 10px var(--cyan-glow);
+    min-width:118px; text-align:center; white-space:nowrap;
+  }
+  .hud-key{
+    width:42px; height:42px; border-radius:11px; border:1px solid var(--border);
+    background:var(--panel-2); display:flex; align-items:center; justify-content:center;
+    font-size:18px; opacity:.25; transition:opacity .25s ease, box-shadow .25s ease; flex:0 0 auto;
+  }
+  .hud-key.active{ opacity:1; border-color:var(--green); box-shadow:0 0 14px var(--green-glow); }
+
+  .log-strip{
+    font-family:var(--mono); font-size:10px; color:var(--text-faint);
+    padding:5px 14px; white-space:nowrap; overflow:hidden; border-bottom:1px solid var(--border-soft);
+    background:var(--bg-1);
+  }
+  .log-strip span{ display:inline-block; padding-right:40px; animation:scrollLog 16s linear infinite; }
+  @keyframes scrollLog{ 0%{ transform:translateX(0);} 100%{ transform:translateX(-50%);} }
+
+  .maze-wrap{ flex:1; display:flex; align-items:center; justify-content:center; padding:10px; min-height:0; }
+  #maze{
+    display:grid; width:min(94vw, 92vh - 230px, 460px); aspect-ratio:1/1;
+    background:var(--bg-1); border:1px solid var(--border); border-radius:10px;
+    box-shadow:0 0 0 1px #000, 0 20px 50px -30px rgba(0,0,0,.8);
+    overflow:hidden;
+  }
+  .cell{ position:relative; }
+  .cell.wall{
+    background:
+      repeating-linear-gradient(135deg, rgba(255,255,255,.09) 0 6px, transparent 6px 12px),
+      var(--wall);
+    border:1px solid var(--wall-border);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.05);
+  }
+  .cell.floor{ background:var(--panel); border:1px solid var(--border-soft); }
+  .cell.floor::after{
+    content:""; position:absolute; inset:0; background:radial-gradient(circle at 50% 50%, rgba(47,230,214,.05), transparent 70%);
+  }
+
+  .tile-badge{
+    position:absolute; inset:8%; border-radius:5px; display:flex; align-items:center; justify-content:center;
+    font-family:var(--mono); font-weight:700; line-height:1;
+  }
+  .tile-door{
+    border:1.4px solid var(--amber); color:var(--amber); background:rgba(255,180,84,.08);
+    box-shadow:0 0 8px var(--amber-glow) inset;
+    font-size:clamp(9px, 2.4vw, 13px);
+  }
+  .tile-door.real{ border-color:var(--red); color:var(--red); box-shadow:0 0 8px var(--red-glow) inset; }
+  .tile-chest{
+    font-size:clamp(12px, 3vw, 18px); border:1.4px solid var(--green); color:var(--green);
+    background:rgba(62,224,138,.1); box-shadow:0 0 10px var(--green-glow) inset;
+    animation:chestPulse 1.1s ease-in-out infinite;
+  }
+  @keyframes chestPulse{ 0%,100%{ transform:scale(1);} 50%{ transform:scale(1.12);} }
+  .tile-chest.opened{ animation:none; opacity:.4; border-color:var(--text-faint); color:var(--text-faint); box-shadow:none; }
+  .tile-pedestal{
+    border:1.4px solid #c084fc; color:#c084fc; box-shadow:0 0 10px rgba(192,132,252,.4) inset;
+    font-size:clamp(10px, 2.6vw, 15px);
+  }
+  .tile-pedestal.charged{ animation:pedestalPulse 1.2s ease-in-out infinite; }
+  @keyframes pedestalPulse{ 0%,100%{ box-shadow:0 0 10px rgba(192,132,252,.4) inset;} 50%{ box-shadow:0 0 18px rgba(192,132,252,.9) inset;} }
+  .tile-portal{
+    position:absolute; border-radius:50%; inset:6%;
+    background:conic-gradient(from 0deg, var(--green), #7dffc0, var(--green));
+    box-shadow:0 0 16px var(--green-glow), 0 0 30px var(--green-glow);
+    animation:spin 2.2s linear infinite;
+    z-index:2;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  .player{
+    position:absolute; inset:18%; border-radius:50%;
+    background:radial-gradient(circle at 32% 28%, #ffffff, var(--cyan) 45%, var(--cyan-dim) 100%);
+    box-shadow:0 0 4px #fff, 0 0 14px var(--cyan-glow), 0 0 26px var(--cyan-glow);
+    z-index:3;
+    animation:playerSpin 3.4s linear infinite;
+  }
+  @keyframes playerSpin{ from{ transform:rotate(0deg); } to{ transform:rotate(360deg); } }
+
+  /* ---------- matrix / digital rain ---------- */
+  #matrix-overlay{
+    position:fixed; inset:0; z-index:40; display:flex; align-items:center; justify-content:center;
+    background:rgba(2,4,7,0); pointer-events:none; opacity:0; transition:opacity .25s ease, background .25s ease;
+  }
+  #matrix-overlay.show{ opacity:1; background:rgba(2,4,7,.82); }
+  #matrix-canvas{ position:absolute; inset:0; width:100%; height:100%; }
+  .matrix-caption{
+    position:relative; font-family:var(--mono); font-weight:800; letter-spacing:.08em; text-align:center;
+    padding:14px 22px; border:1px solid; border-radius:10px; background:rgba(4,8,12,.55);
+    text-transform:uppercase; font-size:clamp(13px,4vw,18px); opacity:0; transform:scale(.9);
+    transition:opacity .25s ease .1s, transform .25s ease .1s;
+  }
+  #matrix-overlay.show .matrix-caption{ opacity:1; transform:scale(1); }
+  .matrix-caption.alter{ color:var(--amber); border-color:var(--amber); text-shadow:0 0 12px var(--amber-glow); }
+  .matrix-caption.drop{ color:var(--red); border-color:var(--red); text-shadow:0 0 12px var(--red-glow); }
+  .matrix-caption.create{ color:var(--green); border-color:var(--green); text-shadow:0 0 12px var(--green-glow); }
+
+
+  .hud-bottom{
+    display:flex; align-items:center; justify-content:center; gap:26px;
+    padding:8px 16px calc(14px + env(safe-area-inset-bottom));
+    background:linear-gradient(0deg, rgba(6,10,16,.95), rgba(6,10,16,.6));
+    border-top:1px solid var(--border-soft);
+  }
+  .dpad{ display:grid; grid-template-columns:56px 56px 56px; grid-template-rows:56px 56px 56px; gap:6px; }
+  .dpad-btn{
+    border-radius:14px; border:1px solid var(--border); background:var(--panel-2);
+    color:var(--cyan); font-size:22px; display:flex; align-items:center; justify-content:center;
+    box-shadow:0 3px 0 0 #060a10, inset 0 0 0 1px rgba(47,230,214,.05);
+  }
+  .dpad-btn:active{ transform:translateY(2px); box-shadow:0 1px 0 0 #060a10; background:var(--cyan-dim); color:#04211d; }
+  .dpad-mid{ display:flex; align-items:center; justify-content:center; }
+  .dpad-core{ width:20px; height:20px; border-radius:50%; border:1px solid var(--border); background:var(--bg-1); }
+
+  .status-pill{
+    font-family:var(--mono); font-size:11px; color:var(--text-dim);
+    border:1px solid var(--border); border-radius:20px; padding:8px 14px; max-width:150px; text-align:center;
+    line-height:1.4;
+  }
+
+  /* ---------- overlay / modals ---------- */
+  .overlay{
+    position:fixed; inset:0; background:rgba(3,6,10,.72); backdrop-filter:blur(3px);
+    display:flex; align-items:center; justify-content:center; padding:20px; z-index:50;
+  }
+  .overlay.hidden{ display:none; }
+  .modal{
+    display:none; width:100%; max-width:380px; background:var(--panel);
+    border:1px solid var(--border); border-radius:16px; padding:20px 18px;
+    box-shadow:0 30px 70px -30px rgba(0,0,0,.8);
+    max-height:86vh; overflow-y:auto;
+  }
+  .modal.show{ display:block; animation:modalIn .18s ease; }
+  @keyframes modalIn{ from{ opacity:0; transform:translateY(8px) scale(.98);} to{ opacity:1; transform:none; } }
+
+  .modal-eyebrow{ display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+  .modal-eyebrow .dot{ width:7px; height:7px; border-radius:50%; }
+  .modal-title{ font-size:18px; font-weight:700; margin:0 0 8px; }
+  .modal-text{ font-size:13.5px; color:var(--text-dim); line-height:1.55; margin:0 0 14px; }
+
+  .code-block{
+    font-family:var(--mono); font-size:12.5px; line-height:1.6; background:#040709;
+    border:1px solid var(--border-soft); border-radius:10px; padding:12px 14px; margin:0 0 14px;
+    white-space:pre-wrap; word-break:break-word; overflow:hidden;
+  }
+  .code-block .kw{ font-weight:700; }
+  .code-alter .kw{ color:var(--amber); }
+  .code-drop .kw{ color:var(--red); }
+  .code-create .kw{ color:var(--green); }
+  .caret{ display:inline-block; width:7px; height:14px; background:currentColor; vertical-align:middle; margin-left:2px; animation:blink 1s step-end infinite; }
+  @keyframes blink{ 50%{ opacity:0; } }
+
+  .modal-actions{ display:flex; flex-direction:column; gap:8px; margin-top:4px; }
+
+  .name-fields{ display:flex; flex-direction:column; gap:10px; margin:2px 0 10px; }
+  .name-input{
+    font-family:var(--sans); font-size:15.5px; padding:12px 14px; border-radius:10px;
+    border:1px solid var(--border); background:var(--panel-2); color:var(--text); outline:none;
+    width:100%;
+  }
+  .name-input::placeholder{ color:var(--text-faint); }
+  .name-input:focus{ border-color:var(--cyan-dim); box-shadow:0 0 0 2px rgba(47,230,214,.15); }
+  .name-error{ color:var(--red); display:none; margin:-4px 0 10px; font-size:12.5px; }
+  .name-error.show{ display:block; }
+
+  #modal-victory .trophy{ font-size:40px; text-align:center; margin-bottom:6px; }
+  .victory-time{
+    font-family:var(--mono); font-size:clamp(24px, 8vw, 34px); font-weight:800; text-align:center; color:var(--green);
+    text-shadow:0 0 16px var(--green-glow); margin:4px 0 4px; white-space:nowrap;
+  }
+  .victory-badge{
+    display:block; margin:0 auto 14px; width:fit-content; font-family:var(--mono); font-size:11.5px;
+    padding:6px 12px; border-radius:20px; border:1px solid var(--amber); color:var(--amber);
+    background:rgba(255,180,84,.08);
+  }
+  .victory-badge.invalid{ border-color:var(--text-faint); color:var(--text-dim); background:transparent; }
+
+  /* history */
+  .history-list{ display:flex; flex-direction:column; gap:8px; margin-bottom:14px; max-height:44vh; overflow-y:auto; }
+  .history-empty{ text-align:center; color:var(--text-dim); font-size:13px; padding:20px 0; }
+  .history-item{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    border:1px solid var(--border); border-radius:12px; padding:11px 13px; background:var(--panel-2);
+  }
+  .history-item.winner{ border-color:var(--amber); box-shadow:0 0 0 1px rgba(255,180,84,.15) inset; }
+  .hist-left{ display:flex; flex-direction:column; gap:3px; min-width:0; }
+  .hist-name{ font-size:14px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hist-attempt{ font-size:12px; color:var(--text-dim); }
+  .hist-date{ font-size:10.5px; color:var(--text-faint); font-family:var(--mono); }
+  .hist-right{ text-align:right; display:flex; flex-direction:column; align-items:flex-end; gap:3px; flex:0 0 auto; }
+  .hist-time{ font-family:var(--mono); font-weight:700; font-size:15px; color:var(--cyan); }
+  .hist-tag{ font-size:9.5px; font-family:var(--mono); padding:2px 7px; border-radius:10px; }
+  .hist-tag.win{ background:rgba(255,180,84,.15); color:var(--amber); }
+  .hist-tag.train{ background:rgba(125,147,166,.15); color:var(--text-dim); }
+
+  /* howto */
+  .howto-list{ display:flex; flex-direction:column; gap:10px; margin-bottom:14px; }
+  .howto-item{ display:flex; gap:10px; align-items:flex-start; font-size:13px; color:var(--text-dim); line-height:1.5; }
+  .howto-ico{ flex:0 0 auto; width:26px; text-align:center; }
+
+  /* toast */
+  .toast{
+    position:fixed; left:50%; bottom:calc(150px + env(safe-area-inset-bottom)); transform:translateX(-50%);
+    background:#0c1420; border:1px solid var(--border); color:var(--text); font-size:12.5px;
+    padding:9px 15px; border-radius:20px; z-index:60; max-width:88vw; text-align:center;
+    box-shadow:0 10px 24px -12px rgba(0,0,0,.6);
+  }
+  .toast.hidden{ display:none; }
+
+  @media (max-height: 620px){
+    .dpad{ grid-template-columns:48px 48px 48px; grid-template-rows:48px 48px 48px; }
+    .hud-btn, .hud-key{ width:36px; height:36px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ MENU ============ -->
+  <section id="screen-menu" class="screen active">
+    <canvas id="menu-matrix-canvas"></canvas>
+    <div class="menu-wrap">
+      <div class="menu-hero">
+        <div class="hero-top">
+          <span class="brand">schema://labirinto</span>
+          <span class="hero-dot"></span>
+        </div>
+        <h1 class="hero-title">DDL <span class="accent">//</span> Fuga do<br>Labirinto</h1>
+        <p class="hero-sub">Encontre a porta certa antes que alguém reescreva o esquema. Use o D-Pad para navegar e sobreviva a três comandos DDL em tempo real.</p>
+        <div class="schema-strip">
+          <span class="ddl-chip c1"><b>ALTER</b> TABLE</span>
+          <span class="ddl-chip c2"><b>DROP</b> TABLE</span>
+          <span class="ddl-chip c3"><b>CREATE</b> TABLE</span>
+        </div>
+      </div>
+
+      <div class="menu-actions">
+        <button class="btn btn-primary btn-block" id="btn-start">▶ Iniciar Jogo</button>
+        <div class="menu-secondary">
+          <button class="btn btn-ghost" id="btn-history">🏆 Tempo de conclusão</button>
+          <button class="btn btn-ghost" id="btn-howto">❔ Como jogar</button>
+        </div>
+      </div>
+
+      <p class="menu-footnote">apenas a 1ª tentativa vale para o prêmio</p>
+    </div>
+  </section>
+
+  <!-- ============ GAME ============ -->
+  <section id="screen-game" class="screen">
+    <div class="hud-top">
+      <button class="hud-btn" id="btn-pause" aria-label="Pausar">⏸</button>
+      <div class="hud-timer" id="timer-display">00:00.000</div>
+      <div class="hud-key" id="hud-key" title="Chave">🔑</div>
+    </div>
+    <div class="log-strip"><span id="log-text">-- carregando conexão com o servidor --&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-- carregando conexão com o servidor --&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></div>
+
+    <div class="maze-wrap">
+      <div id="maze"></div>
+    </div>
+
+    <div class="hud-bottom">
+      <div class="status-pill" id="status-pill">encontre a porta 3</div>
+      <div class="dpad">
+        <div></div>
+        <button class="dpad-btn" id="btn-up" data-dir="up">⬆</button>
+        <div></div>
+        <button class="dpad-btn" id="btn-left" data-dir="left">⬅</button>
+        <div class="dpad-mid"><div class="dpad-core"></div></div>
+        <button class="dpad-btn" id="btn-right" data-dir="right">➡</button>
+        <div></div>
+        <button class="dpad-btn" id="btn-down" data-dir="down">⬇</button>
+        <div></div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- ============ INTRUSION / MATRIX RAIN ============ -->
+<div id="matrix-overlay">
+  <canvas id="matrix-canvas"></canvas>
+  <div class="matrix-caption" id="matrix-caption"></div>
+</div>
+
+<!-- ============ OVERLAY / MODALS ============ -->
+<div id="overlay" class="overlay hidden">
+
+  <div id="modal-name" class="modal">
+    <div class="modal-eyebrow"><span class="dot" style="background:var(--cyan)"></span><span class="brand">identificação</span></div>
+    <h2 class="modal-title">Antes de começar...</h2>
+    <p class="modal-text">Digite seu nome e sobrenome. Essa informação fica salva junto com o seu tempo no histórico, para a organização conferir na hora do prêmio.</p>
+    <div class="name-fields">
+      <input type="text" id="input-first-name" class="name-input" placeholder="Nome" maxlength="40" autocomplete="given-name">
+      <input type="text" id="input-last-name" class="name-input" placeholder="Sobrenome" maxlength="40" autocomplete="family-name">
+    </div>
+    <p class="modal-text name-error" id="name-error">Preencha nome e sobrenome para continuar.</p>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="btn-name-confirm">▶ Começar</button>
+      <button class="btn btn-ghost" id="btn-name-cancel">Cancelar</button>
+    </div>
+  </div>
+
+  <div id="modal-sign" class="modal">
+    <div class="modal-eyebrow"><span class="dot" style="background:var(--cyan)"></span><span class="brand">placa na entrada</span></div>
+    <h2 class="modal-title">🚪 Aviso do Labirinto</h2>
+    <p class="modal-text">"Se você quer sair do labirinto, deve encontrar a porta de saída que está numerada com o número <b style="color:var(--amber)">3</b>."</p>
+    <p class="modal-text">O cronômetro só começa a contar quando você fechar este aviso. Use as setas na parte de baixo da tela para se mover.</p>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="btn-sign-ok">Entendi, vamos lá!</button>
+    </div>
+  </div>
+
+  <div id="modal-hack" class="modal">
+    <div class="modal-eyebrow"><span class="dot" id="hack-dot"></span><span class="brand" id="hack-eyebrow">alerta de intrusão</span></div>
+    <h2 class="modal-title" id="hack-title">Comando detectado</h2>
+    <pre class="code-block" id="hack-code"></pre>
+    <p class="modal-text" id="hack-text"></p>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="btn-hack-ok">Continuar</button>
+    </div>
+  </div>
+
+  <div id="modal-pause" class="modal">
+    <div class="modal-eyebrow"><span class="dot" style="background:var(--text-dim)"></span><span class="brand">execução suspensa</span></div>
+    <h2 class="modal-title">⏸ PAUSADO</h2>
+    <p class="modal-text">O cronômetro está parado. Ninguém pode ver sua tela agora — respire e planeje sua rota.</p>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="btn-resume">▶ Continuar</button>
+      <button class="btn btn-ghost" id="btn-pause-menu">Sair para o menu</button>
+    </div>
+  </div>
+
+  <div id="modal-victory" class="modal">
+    <div class="trophy">🎉</div>
+    <h2 class="modal-title" style="text-align:center" id="victory-name">Você saiu do labirinto!</h2>
+    <p class="modal-text" style="text-align:center; margin-bottom:2px;">tempo final</p>
+    <div class="victory-time" id="victory-time">00:00.000</div>
+    <span class="victory-badge" id="victory-badge">🏆 VÁLIDO PARA O PRÊMIO</span>
+    <p class="modal-text" id="send-status" style="text-align:center; margin:0 0 10px;"></p>
+    <button class="btn btn-ghost btn-sm" id="btn-send-retry" style="display:none; margin:0 auto 12px;">Tentar enviar agora</button>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="btn-victory-history">Ver histórico de tempos</button>
+      <button class="btn btn-ghost" id="btn-victory-menu">Voltar ao menu</button>
+    </div>
+  </div>
+
+  <div id="modal-history" class="modal">
+    <div class="modal-eyebrow"><span class="dot" style="background:var(--amber)"></span><span class="brand">registro local</span></div>
+    <h2 class="modal-title">Tempo de conclusão</h2>
+    <p class="modal-text" style="margin-bottom:10px;">Somente a <b>1ª tentativa</b> registrada neste aparelho concorre ao prêmio — as seguintes contam como treino.</p>
+    <div class="history-list" id="history-list"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="btn-history-close">Fechar</button>
+    </div>
+  </div>
+
+  <div id="modal-howto" class="modal">
+    <div class="modal-eyebrow"><span class="dot" style="background:var(--cyan)"></span><span class="brand">manual rápido</span></div>
+    <h2 class="modal-title">Como jogar</h2>
+    <div class="howto-list">
+      <div class="howto-item"><span class="howto-ico">🎮</span>Use as setas na parte de baixo da tela para andar. Segure o botão pressionado para andar mais rápido.</div>
+      <div class="howto-item"><span class="howto-ico">🚪</span>O labirinto tem 8 portas numeradas de 1 a 8, cheio de ramificações e becos sem saída. Apenas a porta 3 leva à saída — as outras são falsas.</div>
+      <div class="howto-item"><span class="howto-ico">💾</span>Sempre que o sistema é invadido, a tela mostra uma chuva de código verde antes de revelar o que mudou. Fique de olho!</div>
+      <div class="howto-item"><span class="howto-ico">🔀</span>Ao se aproximar da porta 3, um comando <b>ALTER</b> troca o número dela com o de outra porta do mapa. A saída passa a ser a porta que virou "3" — pode acontecer mais de uma vez, então sempre siga o número "3" mais recente.</div>
+      <div class="howto-item"><span class="howto-ico">🧰</span>Quando o número "3" parar de se mover e você alcançar essa porta, um comando <b>DROP</b> a transforma em parede. A chave que aparece ali já é automaticamente sua.</div>
+      <div class="howto-item"><span class="howto-ico">🗝️</span>Leve a chave até o pedestal da sala central (o cruzamento com 4 corredores): um comando <b>CREATE</b> abre o portal de saída.</div>
+      <div class="howto-item"><span class="howto-ico">🌀</span>O portal surge em um dos 4 corredores da sala central. Entre nele para vencer.</div>
+      <div class="howto-item"><span class="howto-ico">⏱️</span>O cronômetro começa assim que você toca em "Iniciar Jogo" e só para quando você entra no portal.</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="btn-howto-close">Entendi</button>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* =========================================================
+     MAZE DATA
+     23x23 grid (11x11 salas). 1 = parede, 0 = caminho.
+     Gerado por backtracking recursivo e verificado por BFS
+     (todas as portas, o pedestal e os 4 corredores centrais
+     são alcançáveis a partir do início). Mapa maior, com bem
+     mais ramificações e becos sem saída que a versão anterior.
+     Caminho mínimo até a saída real: ~56 passos até a porta 3,
+     mais ~36 até a porta que vira a nova "3" após a troca,
+     mais ~16 até o centro e 2 até o corredor do portal.
+  ========================================================= */
+  var GRID = [
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,1],
+    [1,1,1,0,1,1,1,0,1,0,1,0,1,0,1,0,1,1,1,1,1,0,1],
+    [1,0,1,0,1,0,0,0,1,0,1,0,1,0,0,0,0,0,1,0,0,0,1],
+    [1,0,1,0,1,0,1,1,1,0,1,0,1,1,1,1,1,1,1,0,1,0,1],
+    [1,0,1,0,1,0,1,0,0,0,1,0,0,0,1,0,0,0,0,0,1,0,1],
+    [1,0,1,0,1,0,1,1,1,0,1,1,1,1,1,0,1,1,1,1,1,0,1],
+    [1,0,1,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,1],
+    [1,0,1,0,1,0,1,0,1,1,1,0,1,0,1,1,1,0,1,1,1,0,1],
+    [1,0,0,0,1,0,1,0,0,0,1,0,0,0,1,0,0,0,0,0,1,0,1],
+    [1,0,1,1,1,0,1,1,1,0,1,0,1,1,1,0,1,1,1,0,1,0,1],
+    [1,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,1,0,1,0,1,0,1],
+    [1,1,1,0,1,1,1,1,1,0,1,0,1,1,1,1,1,0,1,0,1,0,1],
+    [1,0,1,0,1,0,0,0,1,0,1,0,0,0,0,0,1,0,1,0,0,0,1],
+    [1,0,1,0,1,0,1,0,1,0,1,1,1,1,1,0,1,0,1,1,1,1,1],
+    [1,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,1,0,0,0,0,0,1],
+    [1,0,1,1,1,1,1,1,1,1,1,0,1,0,1,0,1,1,1,0,1,0,1],
+    [1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,1,0,0,0,1,0,1],
+    [1,0,1,0,1,0,1,0,1,1,1,1,1,1,1,1,1,0,1,1,1,0,1],
+    [1,0,1,0,1,0,1,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,1],
+    [1,0,1,0,1,1,1,1,1,0,1,1,1,1,1,0,1,1,1,0,1,1,1],
+    [1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+  ];
+  var SIZE = 23;
+
+  var START = {r:1, c:1};
+  var PEDESTAL = {r:11, c:11};
+  var ARMS = { up:{r:9,c:11}, down:{r:13,c:11}, left:{r:11,c:9}, right:{r:11,c:13} };
+
+  // DOOR_A é a porta que a placa de entrada manda o jogador procurar (começa com o número 3).
+  // DOOR_B começa com o número 8 (perto de onde a porta 7 costumava ficar).
+  // DOOR_C começa com o número 1, bem perto do início.
+  // A saída de verdade segue uma cadeia de trocas: quando o ALTER dispara perto de DOOR_A,
+  // os números 3 e 8 trocam de lugar e a saída passa a ser DOOR_B. Ao alcançar DOOR_B, os
+  // números 3 e 1 trocam de novo e a saída passa a ser DOOR_C — só aí o DROP acontece de
+  // verdade. Isso faz o jogador atravessar o mapa mais de uma vez antes de achar a chave.
+  var DOOR_A = {r:1, c:21, label:3, id:'door-a-badge'};
+  var DOOR_B = {r:21, c:21, label:8, id:'door-b-badge'};
+  var DOOR_C = {r:1, c:3, label:1, id:'door-c-badge'};
+  var DECOY_DOORS = [
+    {r:11, c:15, label:2, id:'decoy-badge-0'},
+    {r:5, c:17, label:4, id:'decoy-badge-1'},
+    {r:17, c:7, label:5, id:'decoy-badge-2'},
+    {r:19, c:13, label:6, id:'decoy-badge-3'},
+    {r:15, c:3, label:7, id:'decoy-badge-4'}
+  ];
+  var ALL_DOORS = [DOOR_A, DOOR_B, DOOR_C].concat(DECOY_DOORS);
+
+  /* =========================================================
+     STATE
+  ========================================================= */
+  var state = {
+    player: {r:START.r, c:START.c},
+    lastPos: {r:START.r, c:START.c},
+    hasKey: false,
+    activeDoor: DOOR_A,
+    doorStage: 0,
+    dropFired: false,
+    createFired: false,
+    portalPos: null,
+    running: false,
+    paused: false,
+    locked: false,
+    startTime: 0,
+    pausedAccum: 0,
+    pauseStartedAt: 0,
+    timerInterval: null,
+    finished: false,
+    playerName: '',
+    playerFirst: '',
+    playerLast: ''
+  };
+
+  var cellEls = []; // [r][c] -> element
+  var playerEl = null;
+  var moveHoldTimer = null;
+  var moveHoldInterval = null;
+
+  /* =========================================================
+     DOM SHORTCUTS
+  ========================================================= */
+  function $(id){ return document.getElementById(id); }
+
+  var screenMenu = $('screen-menu');
+  var screenGame = $('screen-game');
+  var mazeEl = $('maze');
+  var overlay = $('overlay');
+  var timerDisplay = $('timer-display');
+  var hudKey = $('hud-key');
+  var statusPill = $('status-pill');
+  var toastEl = $('toast');
+  var matrixOverlay = $('matrix-overlay');
+  var matrixCanvas = $('matrix-canvas');
+  var matrixCaption = $('matrix-caption');
+  var menuMatrixCanvas = $('menu-matrix-canvas');
+
+  var modals = {
+    name: $('modal-name'),
+    sign: $('modal-sign'),
+    hack: $('modal-hack'),
+    pause: $('modal-pause'),
+    victory: $('modal-victory'),
+    history: $('modal-history'),
+    howto: $('modal-howto')
+  };
+
+  /* =========================================================
+     MODAL HELPERS
+  ========================================================= */
+  var modalOpen = false;
+
+  function showModal(name){
+    Object.keys(modals).forEach(function(k){ modals[k].classList.remove('show'); });
+    overlay.classList.remove('hidden');
+    modals[name].classList.add('show');
+    modalOpen = true;
+  }
+  function hideModals(){
+    Object.keys(modals).forEach(function(k){ modals[k].classList.remove('show'); });
+    overlay.classList.add('hidden');
+    modalOpen = false;
+  }
+
+  var toastTimer = null;
+  function showToast(msg, ms){
+    toastEl.textContent = msg;
+    toastEl.classList.remove('hidden');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toastEl.classList.add('hidden'); }, ms || 1700);
+  }
+
+  /* =========================================================
+     MAZE RENDER
+  ========================================================= */
+  function buildMaze(){
+    mazeEl.style.gridTemplateColumns = 'repeat(' + SIZE + ', 1fr)';
+    mazeEl.style.gridTemplateRows = 'repeat(' + SIZE + ', 1fr)';
+    mazeEl.innerHTML = '';
+    cellEls = [];
+
+    for(var r=0; r<SIZE; r++){
+      cellEls.push([]);
+      for(var c=0; c<SIZE; c++){
+        var cell = document.createElement('div');
+        var isWall = GRID[r][c] === 1;
+        cell.className = 'cell ' + (isWall ? 'wall' : 'floor');
+        cell.setAttribute('data-r', r);
+        cell.setAttribute('data-c', c);
+        mazeEl.appendChild(cell);
+        cellEls[r].push(cell);
+      }
+    }
+
+    // todas as 8 portas numeradas (DOOR_A, DOOR_B e as 6 decoys), cada uma com id próprio
+    ALL_DOORS.forEach(function(d){
+      var badge = document.createElement('div');
+      badge.className = 'tile-badge tile-door' + (d === state.activeDoor ? ' real' : '');
+      badge.id = d.id;
+      badge.textContent = d.label;
+      cellEls[d.r][d.c].appendChild(badge);
+    });
+
+    // pedestal
+    var ped = document.createElement('div');
+    ped.className = 'tile-badge tile-pedestal';
+    ped.id = 'pedestal-badge';
+    ped.textContent = '🔒';
+    cellEls[PEDESTAL.r][PEDESTAL.c].appendChild(ped);
+
+    // player
+    playerEl = document.createElement('div');
+    playerEl.className = 'player';
+    cellEls[state.player.r][state.player.c].appendChild(playerEl);
+  }
+
+  // o baú fica visível sobre a própria parede que substituiu a porta —
+  // nunca fica embaixo do jogador, então é sempre visível.
+  function renderChestOnWall(doorObj){
+    var el = document.createElement('div');
+    el.className = 'tile-badge tile-chest';
+    el.id = 'chest-badge';
+    el.textContent = '🧰';
+    cellEls[doorObj.r][doorObj.c].appendChild(el);
+  }
+  function markChestOpened(){
+    var el = $('chest-badge');
+    if(el){ el.textContent = '📭'; el.classList.add('opened'); }
+  }
+
+  function renderPortal(){
+    if(!state.portalPos) return;
+    var el = document.createElement('div');
+    el.className = 'tile-portal';
+    el.id = 'portal-badge';
+    cellEls[state.portalPos.r][state.portalPos.c].appendChild(el);
+  }
+
+  function movePlayerEl(){
+    cellEls[state.player.r][state.player.c].appendChild(playerEl);
+  }
+
+  function wallify(r, c){
+    GRID[r][c] = 1;
+    var cellEl = cellEls[r][c];
+    cellEl.className = 'cell wall';
+    cellEl.innerHTML = '';
+  }
+
+  /* =========================================================
+     TIMER
+  ========================================================= */
+  function formatTime(ms){
+    var totalMs = Math.max(0, Math.floor(ms));
+    var m = Math.floor(totalMs / 60000);
+    var s = Math.floor((totalMs % 60000) / 1000);
+    var msPart = totalMs % 1000;
+    var msStr = msPart < 10 ? '00' + msPart : (msPart < 100 ? '0' + msPart : '' + msPart);
+    return (m < 10 ? '0' + m : m) + ':' + (s < 10 ? '0' + s : s) + '.' + msStr;
+  }
+
+  function tick(){
+    if(!state.running || state.paused) return;
+    var elapsed = Date.now() - state.startTime - state.pausedAccum;
+    timerDisplay.textContent = formatTime(elapsed);
+  }
+
+  function startTimer(){
+    state.startTime = Date.now();
+    state.pausedAccum = 0;
+    state.running = true;
+    state.paused = false;
+    timerDisplay.textContent = '00:00.000';
+    clearInterval(state.timerInterval);
+    state.timerInterval = setInterval(tick, 50);
+  }
+
+  function getElapsedMs(){
+    return Date.now() - state.startTime - state.pausedAccum;
+  }
+
+  function stopTimer(){
+    state.running = false;
+    clearInterval(state.timerInterval);
+  }
+
+  function pauseTimer(){
+    if(!state.running || state.paused) return;
+    state.paused = true;
+    state.pauseStartedAt = Date.now();
+  }
+  function resumeTimer(){
+    if(!state.running || !state.paused) return;
+    state.pausedAccum += (Date.now() - state.pauseStartedAt);
+    state.paused = false;
+  }
+
+  /* =========================================================
+     GAME FLOW / EVENTS
+  ========================================================= */
+  function resetGameState(){
+    state.player = {r:START.r, c:START.c};
+    state.lastPos = {r:START.r, c:START.c};
+    state.hasKey = false;
+    state.activeDoor = DOOR_A;
+    state.doorStage = 0;
+    state.dropFired = false;
+    state.createFired = false;
+    state.portalPos = null;
+    state.paused = false;
+    state.locked = false;
+    state.finished = false;
+    // restaura a porta C (que pode ter virado parede numa partida anterior) e os números originais
+    GRID[DOOR_C.r][DOOR_C.c] = 0;
+    DOOR_A.label = 3;
+    DOOR_B.label = 8;
+    DOOR_C.label = 1;
+    hudKey.classList.remove('active');
+    statusPill.textContent = 'encontre a porta 3';
+  }
+
+  function startGame(){
+    resetGameState();
+    stopMenuRain();
+    screenMenu.classList.remove('active');
+    screenGame.classList.add('active');
+    buildMaze();
+    startTimer();
+    pauseTimer(); // não conta o tempo enquanto o jogador lê a placa de entrada
+    showModal('sign');
+  }
+
+  function backToMenu(){
+    stopTimer();
+    hideModals();
+    screenGame.classList.remove('active');
+    screenMenu.classList.add('active');
+    startMenuRain();
+  }
+
+  function manhattan(a, b){
+    return Math.abs(a.r - b.r) + Math.abs(a.c - b.c);
+  }
+
+  var HACK_CONTENT = {
+    alter: {
+      eyebrow: 'alerta de intrusão · alter',
+      dotColor: 'var(--amber)',
+      captionClass: 'alter',
+      captionText: 'invasão detectada',
+      title: 'A saída trocou de lugar!',
+      codeClass: 'code-alter',
+      code: '<span class="kw">ALTER TABLE</span> labirinto <span class="kw">RENAME COLUMN</span> porta_03 <span class="kw">TO</span> porta_tmp;\n<span class="kw">ALTER TABLE</span> labirinto <span class="kw">RENAME COLUMN</span> porta_08 <span class="kw">TO</span> porta_03;\n<span class="kw">ALTER TABLE</span> labirinto <span class="kw">RENAME COLUMN</span> porta_tmp <span class="kw">TO</span> porta_08;',
+      text: 'Os números 3 e 8 foram trocados entre duas portas diferentes do labirinto (por isso o comando usa um nome temporário — é assim que se troca o nome de duas colunas sem conflito). A porta que você estava seguindo agora é a "8". A saída de verdade foi junto com o número 3, em outro ponto do mapa. Vá atrás dela!'
+    },
+    alter2: {
+      eyebrow: 'alerta de intrusão · alter (de novo)',
+      dotColor: 'var(--amber)',
+      captionClass: 'alter',
+      captionText: 'nova invasão detectada',
+      title: 'A saída trocou de lugar outra vez!',
+      codeClass: 'code-alter',
+      code: '<span class="kw">ALTER TABLE</span> labirinto <span class="kw">RENAME COLUMN</span> porta_03 <span class="kw">TO</span> porta_tmp;\n<span class="kw">ALTER TABLE</span> labirinto <span class="kw">RENAME COLUMN</span> porta_01 <span class="kw">TO</span> porta_03;\n<span class="kw">ALTER TABLE</span> labirinto <span class="kw">RENAME COLUMN</span> porta_tmp <span class="kw">TO</span> porta_01;',
+      text: 'O sistema disparou outro ALTER assim que você chegou! A porta que você acabou de alcançar agora é a "1". A saída de verdade foi para onde estava a porta 1, em outro canto do mapa. É a última troca — vá até lá.'
+    },
+    drop: {
+      eyebrow: 'alerta crítico · drop',
+      dotColor: 'var(--red)',
+      captionClass: 'drop',
+      captionText: 'apagando registro',
+      title: 'A porta de saída foi removida!',
+      codeClass: 'code-drop',
+      code: '<span class="kw">DROP TABLE</span> porta_saida_03;\n-- Query OK, 0 rows affected',
+      text: 'No lugar da porta agora há uma parede. Um baú apareceu bem ali: a chave já está com você. Leve-a até o pedestal na sala central de 4 corredores.'
+    },
+    create: {
+      eyebrow: 'restauração · create',
+      dotColor: 'var(--green)',
+      captionClass: 'create',
+      captionText: 'restaurando acesso',
+      title: 'Um novo portal foi criado!',
+      codeClass: 'code-create',
+      code: '<span class="kw">CREATE TABLE</span> portal_saida (\n  id INT PRIMARY KEY,\n  status VARCHAR(20) DEFAULT \'ativo\'\n);',
+      text: 'O pedestal aceitou a chave. Um portal de saída surgiu em um dos corredores da sala central — encontre-o para escapar do labirinto.'
+    }
+  };
+
+  function fireHack(kind, onClose){
+    var data = HACK_CONTENT[kind];
+    $('hack-eyebrow').textContent = data.eyebrow;
+    $('hack-dot').style.background = data.dotColor;
+    $('hack-title').textContent = data.title;
+    var codeEl = $('hack-code');
+    codeEl.className = 'code-block ' + data.codeClass;
+    codeEl.innerHTML = data.code + '<span class="caret"></span>';
+    $('hack-text').textContent = data.text;
+    showModal('hack');
+
+    var okBtn = $('btn-hack-ok');
+    okBtn.onclick = function(){
+      hideModals();
+      state.locked = false;
+      resumeTimer(); // o cronômetro ficou pausado durante a chuva + a leitura do código; volta a contar aqui
+      if(onClose) onClose();
+    };
+  }
+
+  /* -----------------------------------------------------------
+     INTRUSÃO: toda vez que um comando DDL "acontece" no jogo,
+     primeiro mostramos a chuva digital (efeito de hack) e só
+     depois aplicamos a mudança de fato + o modal explicando o
+     comando. Isso separa visualmente cada evento no tempo,
+     mesmo quando o jogador já está bem perto/em cima do gatilho.
+     O cronômetro é pausado assim que a invasão começa (chuva +
+     pop-up) e só volta a contar quando o jogador sai do pop-up,
+     para não penalizar quem está lendo o código DDL.
+  ----------------------------------------------------------- */
+  function beginIntrusion(kind, applyChangeFn){
+    state.locked = true;
+    pauseTimer();
+    playMatrixIntrusion(kind, function(){
+      applyChangeFn();
+      fireHack(kind, function(){});
+    });
+  }
+
+  // troca os NÚMEROS exibidos entre duas portas (a "perde" o destaque de porta ativa, b ganha)
+  function swapDoorLabels(a, b){
+    var tmp = a.label;
+    a.label = b.label;
+    b.label = tmp;
+    var badgeA = $(a.id);
+    if(badgeA){ badgeA.textContent = a.label; badgeA.classList.remove('real'); }
+    var badgeB = $(b.id);
+    if(badgeB){ badgeB.textContent = b.label; badgeB.classList.add('real'); }
+  }
+
+  function checkDoorProximity(){
+    if(state.dropFired) return;
+    var target = state.activeDoor; // DOOR_A -> DOOR_B -> DOOR_C, nessa ordem, ao longo da cadeia
+    var dist = manhattan(state.player, target);
+
+    // Etapa 0: perto da porta A (a original "3"), dispara a 1ª troca (A <-> B)
+    if(state.doorStage === 0 && dist <= 3){
+      state.doorStage = 1;
+      statusPill.textContent = 'algo está mudando na porta 3...';
+      beginIntrusion('alter', function(){
+        swapDoorLabels(DOOR_A, DOOR_B);
+        state.activeDoor = DOOR_B;
+        statusPill.textContent = 'a porta 3 sumiu! ache a nova porta 3';
+      });
+      return;
+    }
+
+    // Etapa 1: chegar na porta B (agora "3") dispara a 2ª troca (B <-> C), em vez do DROP
+    if(state.doorStage === 1 && dist === 0){
+      state.doorStage = 2;
+      statusPill.textContent = 'a porta trocou de novo...';
+      beginIntrusion('alter2', function(){
+        swapDoorLabels(DOOR_B, DOOR_C);
+        state.activeDoor = DOOR_C;
+        statusPill.textContent = 'de novo?! ache a nova porta 3';
+      });
+      return;
+    }
+
+    // Etapa 2: chegar na porta C (agora "3") finalmente dispara o DROP de verdade
+    if(state.doorStage === 2 && dist === 0){
+      state.dropFired = true;
+      var doorObj = state.activeDoor; // DOOR_C
+      var back = {r: state.lastPos.r, c: state.lastPos.c};
+      statusPill.textContent = 'a porta foi apagada...';
+      beginIntrusion('drop', function(){
+        wallify(doorObj.r, doorObj.c);
+        state.player = back;
+        movePlayerEl();
+        renderChestOnWall(doorObj);
+        // a chave já estava guardada no baú: concedida automaticamente ao ler o alerta
+        state.hasKey = true;
+        hudKey.classList.add('active');
+        markChestOpened();
+        statusPill.textContent = 'leve a chave ao pedestal central';
+      });
+    }
+  }
+
+  function checkPedestal(){
+    if(state.player.r !== PEDESTAL.r || state.player.c !== PEDESTAL.c) return;
+    if(state.createFired) return;
+    if(!state.hasKey){
+      showToast('O pedestal está trancado. Você precisa de uma chave.');
+      return;
+    }
+    state.createFired = true;
+    statusPill.textContent = 'restaurando o acesso...';
+    beginIntrusion('create', function(){
+      var dirs = Object.keys(ARMS);
+      var chosen = dirs[Math.floor(Math.random() * dirs.length)];
+      state.portalPos = ARMS[chosen];
+      var pedBadge = $('pedestal-badge');
+      if(pedBadge){ pedBadge.textContent = '🔓'; pedBadge.classList.add('charged'); }
+      renderPortal();
+      statusPill.textContent = 'encontre o portal!';
+    });
+  }
+
+  function checkDecoyDoor(){
+    for(var i=0;i<ALL_DOORS.length;i++){
+      var d = ALL_DOORS[i];
+      if(d === state.activeDoor) continue; // essa é a porta funcional no momento, não é decoy
+      if(d.r === state.player.r && d.c === state.player.c){
+        showToast('Porta ' + d.label + ' — não é a saída. Continue procurando.');
+        return;
+      }
+    }
+  }
+
+  function checkPortal(){
+    if(!state.portalPos) return;
+    if(state.player.r === state.portalPos.r && state.player.c === state.portalPos.c){
+      finishGame();
+    }
+  }
+
+  function finishGame(){
+    if(state.finished) return;
+    state.finished = true;
+    var elapsed = getElapsedMs();
+    stopTimer();
+    var record = saveAttempt(elapsed, state.playerName);
+    enviarParaServidor(elapsed);
+    $('victory-time').textContent = formatTime(elapsed);
+    var nameEl = $('victory-name');
+    if(nameEl) nameEl.textContent = state.playerName ? ('Parabéns, ' + state.playerName + '!') : 'Você saiu do labirinto!';
+    var badge = $('victory-badge');
+    if(record.isFirstEver){
+      badge.textContent = '🏆 VÁLIDO PARA O PRÊMIO';
+      badge.className = 'victory-badge';
+    } else {
+      badge.textContent = 'Treino · inválido para o prêmio';
+      badge.className = 'victory-badge invalid';
+    }
+    showModal('victory');
+  }
+
+  /* =========================================================
+     MOVEMENT
+  ========================================================= */
+  function canMove(r, c){
+    return r>=0 && r<SIZE && c>=0 && c<SIZE && GRID[r][c] === 0;
+  }
+
+  function inputBlocked(){
+    return modalOpen || state.locked || state.paused || !state.running || state.finished;
+  }
+
+  function move(dir){
+    if(inputBlocked()) return;
+    var dr=0, dc=0;
+    if(dir==='up') dr=-1;
+    else if(dir==='down') dr=1;
+    else if(dir==='left') dc=-1;
+    else if(dir==='right') dc=1;
+    var nr = state.player.r + dr;
+    var nc = state.player.c + dc;
+    if(!canMove(nr, nc)) return;
+    state.lastPos = {r:state.player.r, c:state.player.c};
+    state.player = {r:nr, c:nc};
+    movePlayerEl();
+
+    checkDoorProximity();
+    if(inputBlocked()) return; // uma intrusão pode ter travado o jogo; o resto resolve depois
+    checkDecoyDoor();
+    checkPedestal();
+    if(inputBlocked()) return;
+    checkPortal();
+  }
+
+  function bindHold(el, dir){
+    function start(e){
+      if(e) e.preventDefault();
+      move(dir);
+      clearTimeout(moveHoldTimer);
+      clearInterval(moveHoldInterval);
+      moveHoldTimer = setTimeout(function(){
+        moveHoldInterval = setInterval(function(){ move(dir); }, 150);
+      }, 320);
+    }
+    function stop(e){
+      if(e) e.preventDefault();
+      clearTimeout(moveHoldTimer);
+      clearInterval(moveHoldInterval);
+    }
+    el.addEventListener('touchstart', start, {passive:false});
+    el.addEventListener('touchend', stop);
+    el.addEventListener('touchcancel', stop);
+    el.addEventListener('mousedown', start);
+    el.addEventListener('mouseup', stop);
+    el.addEventListener('mouseleave', stop);
+  }
+
+  bindHold($('btn-up'), 'up');
+  bindHold($('btn-down'), 'down');
+  bindHold($('btn-left'), 'left');
+  bindHold($('btn-right'), 'right');
+
+  document.addEventListener('keydown', function(e){
+    if(!screenGame.classList.contains('active')) return;
+    var map = {ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', w:'up', s:'down', a:'left', d:'right'};
+    if(map[e.key]){ e.preventDefault(); move(map[e.key]); }
+  });
+
+  /* =========================================================
+     LOCAL STORAGE / HISTORY
+  ========================================================= */
+  var STORAGE_KEY = 'ddlMazeAttempts_v1';
+  var PLAYER_NAME_KEY = 'ddlMazePlayerName_v1';
+
+  function loadAttempts(){
+    try{
+      var raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    }catch(e){ return []; }
+  }
+  function persistAttempts(list){
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); }catch(e){}
+  }
+
+  function loadSavedPlayerName(){
+    try{
+      var raw = localStorage.getItem(PLAYER_NAME_KEY);
+      return raw ? JSON.parse(raw) : {first:'', last:''};
+    }catch(e){ return {first:'', last:''}; }
+  }
+  function savePlayerNameForNextTime(first, last){
+    try{ localStorage.setItem(PLAYER_NAME_KEY, JSON.stringify({first:first, last:last})); }catch(e){}
+  }
+
+  // a 1ª tentativa VÁLIDA PARA O PRÊMIO é a primeira tentativa registrada
+  // neste APARELHO (não por nome de jogador). Cada participante joga no seu
+  // próprio celular, então isso evita que alguém "teste" o labirinto com um
+  // nome qualquer e depois use o nome de verdade numa tentativa mais rápida.
+  function saveAttempt(elapsedMs, playerName){
+    var list = loadAttempts();
+    var isFirstEver = list.length === 0;
+    var now = new Date();
+    var entry = {
+      tentativa: list.length + 1,
+      jogador: (playerName || 'Jogador').trim(),
+      tempoTotal: formatTime(elapsedMs),
+      ms: elapsedMs,
+      dataHora: now.toLocaleString('pt-BR')
+    };
+    list.push(entry);
+    persistAttempts(list);
+    return { entry: entry, isFirstEver: isFirstEver };
+  }
+
+  function ordinal(n){
+    return n + 'ª tentativa';
+  }
+
+  function renderHistory(){
+    var list = loadAttempts();
+    var container = $('history-list');
+    container.innerHTML = '';
+    if(list.length === 0){
+      container.innerHTML = '<div class="history-empty">Nenhuma tentativa registrada neste aparelho ainda.</div>';
+      return;
+    }
+    list.forEach(function(item, idx){
+      var isWinner = idx === 0;
+      var row = document.createElement('div');
+      row.className = 'history-item' + (isWinner ? ' winner' : '');
+      row.innerHTML =
+        '<div class="hist-left">' +
+          '<span class="hist-name">' + escapeHtml(item.jogador || 'Jogador') + '</span>' +
+          '<span class="hist-attempt">' + ordinal(item.tentativa) + '</span>' +
+          '<span class="hist-date">' + item.dataHora + '</span>' +
+        '</div>' +
+        '<div class="hist-right">' +
+          '<span class="hist-time">' + item.tempoTotal + '</span>' +
+          '<span class="hist-tag ' + (isWinner ? 'win' : 'train') + '">' + (isWinner ? '🏆 válido p/ prêmio' : 'treino / inválido') + '</span>' +
+        '</div>';
+      container.appendChild(row);
+    });
+  }
+
+  function escapeHtml(str){
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  /* =========================================================
+     ENVIO DO TEMPO PARA O SERVIDOR (Supabase)
+     - cada tentativa ganha um id único (uuid) gerado no celular;
+       se o envio for repetido, o banco ignora a duplicata
+     - o envio vai para uma "fila" salva no aparelho (outbox) e é
+       repetido automaticamente até o servidor confirmar
+  ========================================================= */
+  var SUPABASE_URL = 'https://akwubpvhqygscnhxefmb.supabase.co';
+  var SUPABASE_KEY = 'sb_publishable_QDek-fF7oQXhAcJ1D8WAWQ_g2EIHOnq';
+  var OUTBOX_KEY   = 'ddlMazeOutbox_v1';
+  var DEVICE_KEY   = 'ddlMazeDeviceId_v1';
+  var SEND_TIMEOUT_MS = 10000;
+  var RETRY_DELAYS = [2000, 4000, 8000, 15000, 30000];
+
+  function uuid(){
+    if(window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c){
+      var r = Math.random() * 16 | 0;
+      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+  }
+
+  function getDeviceId(){
+    try{
+      var id = localStorage.getItem(DEVICE_KEY);
+      if(!id){ id = uuid(); localStorage.setItem(DEVICE_KEY, id); }
+      return id;
+    }catch(e){ return null; }
+  }
+
+  function loadOutbox(){
+    try{
+      var raw = localStorage.getItem(OUTBOX_KEY);
+      return raw ? JSON.parse(raw) : [];
+    }catch(e){ return []; }
+  }
+  function saveOutbox(){
+    try{ localStorage.setItem(OUTBOX_KEY, JSON.stringify(outbox)); }catch(e){}
+  }
+
+  var outbox = loadOutbox();
+  outbox.forEach(function(x){ delete x.fatal; }); // ao abrir a página, tenta tudo de novo
+  var currentSendId = null;
+  var flushing = false;
+  var retryTimer = null;
+  var retryCount = 0;
+
+  // devolve 'ok' | 'retry' (tentar de novo) | 'fatal' (dado recusado pelo servidor)
+  function postRegistro(item){
+    var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var timer = setTimeout(function(){ if(ctrl) ctrl.abort(); }, SEND_TIMEOUT_MS);
+    return fetch(SUPABASE_URL + '/rest/v1/rpc/registrar_tentativa', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+      body: JSON.stringify({
+        p_id: item.id,
+        p_nome: item.nome,
+        p_sobrenome: item.sobrenome,
+        p_tempo_ms: item.ms,
+        p_dispositivo: item.dispositivo
+      }),
+      signal: ctrl ? ctrl.signal : undefined
+    }).then(function(res){
+      clearTimeout(timer);
+      if(res.ok) return 'ok';
+      if(res.status >= 500 || res.status === 408 || res.status === 429) return 'retry';
+      return 'fatal';
+    }).catch(function(){
+      clearTimeout(timer);
+      return 'retry';
+    });
+  }
+
+  function updateSendStatus(){
+    var el = $('send-status');
+    var btn = $('btn-send-retry');
+    if(!el || !currentSendId) return;
+    var item = null;
+    for(var i = 0; i < outbox.length; i++){
+      if(outbox[i].id === currentSendId){ item = outbox[i]; break; }
+    }
+    var text, color, showBtn = false;
+    if(!item){
+      text = '✔ Tempo registrado na classificação'; color = 'var(--green)';
+    } else if(item.fatal){
+      text = '⚠ O servidor recusou o registro. Avise a organização e mostre esta tela.'; color = 'var(--red)';
+    } else if(flushing){
+      text = 'Enviando seu tempo…'; color = 'var(--text-dim)';
+    } else {
+      text = '⚠ Ainda não consegui enviar. Vou tentar de novo sozinho — não feche esta página.'; color = 'var(--amber)';
+      showBtn = true;
+    }
+    el.textContent = text;
+    el.style.color = color;
+    if(btn) btn.style.display = showBtn ? 'flex' : 'none';
+  }
+
+  function scheduleRetry(){
+    clearTimeout(retryTimer);
+    var d = RETRY_DELAYS[Math.min(retryCount, RETRY_DELAYS.length - 1)];
+    retryCount++;
+    retryTimer = setTimeout(flushOutbox, d);
+  }
+
+  function flushOutbox(){
+    if(flushing) return;
+    var pending = outbox.filter(function(x){ return !x.fatal; });
+    if(pending.length === 0){ updateSendStatus(); return; }
+    flushing = true;
+    updateSendStatus();
+    var item = pending[0];
+    postRegistro(item).then(function(r){
+      flushing = false;
+      if(r === 'ok'){
+        outbox = outbox.filter(function(x){ return x.id !== item.id; });
+        saveOutbox();
+        retryCount = 0;
+        updateSendStatus();
+        flushOutbox(); // próximo da fila, se houver
+      } else if(r === 'fatal'){
+        item.fatal = true;
+        saveOutbox();
+        updateSendStatus();
+        flushOutbox();
+      } else {
+        updateSendStatus();
+        scheduleRetry();
+      }
+    });
+  }
+
+  function enviarParaServidor(elapsedMs){
+    var item = {
+      id: uuid(),
+      nome: state.playerFirst,
+      sobrenome: state.playerLast,
+      ms: Math.round(elapsedMs),
+      dispositivo: getDeviceId()
+    };
+    outbox.push(item);
+    saveOutbox();
+    currentSendId = item.id;
+    retryCount = 0;
+    clearTimeout(retryTimer);
+    flushOutbox();
+  }
+
+  var btnSendRetry = $('btn-send-retry');
+  if(btnSendRetry){
+    btnSendRetry.addEventListener('click', function(){
+      retryCount = 0;
+      clearTimeout(retryTimer);
+      flushOutbox();
+    });
+  }
+  window.addEventListener('online', function(){
+    retryCount = 0;
+    clearTimeout(retryTimer);
+    flushOutbox();
+  });
+  flushOutbox(); // se sobrou algo na fila de uma visita anterior, envia agora
+
+  /* =========================================================
+     LOG STRIP (ambient flavor text)
+  ========================================================= */
+  var LOG_LINES = [
+    'conectado ao servidor labirinto-db',
+    'verificando integridade do schema...',
+    'aguardando comandos DDL...',
+    'sessão ativa: jogador_01',
+    'monitorando tabela porta_saida_03'
+  ];
+  function setLog(text){
+    var el = $('log-text');
+    el.textContent = text + '\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0' + text + '\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0';
+  }
+  setLog(LOG_LINES[0]);
+  var logIdx = 0;
+  setInterval(function(){
+    if(!screenGame.classList.contains('active')) return;
+    logIdx = (logIdx + 1) % LOG_LINES.length;
+    setLog(LOG_LINES[logIdx]);
+  }, 8000);
+
+  /* =========================================================
+     MATRIX / DIGITAL RAIN
+     Duas versões do mesmo efeito:
+     - playMatrixIntrusion(): tela cheia, dramática, toca antes
+       de cada evento DDL (ALTER/DROP/CREATE) e some sozinha.
+     - startMenuRain()/stopMenuRain(): versão contínua e discreta
+       usada como fundo animado da tela inicial.
+     Se o navegador não suportar canvas 2D (ambiente de teste),
+     as funções degradam graciosamente: nada é desenhado, mas o
+     fluxo do jogo continua funcionando normalmente via setTimeout.
+  ========================================================= */
+  var RAIN_CHARS = '01ABCDEFGHIJKLMNOPQRSTUVWXYZ{}<>/=;$#*%@'.split('');
+  var RAIN_KEYWORDS = ['ALTER','DROP','CREATE','TABLE','SELECT','WHERE','NULL','KEY'];
+
+  function makeRainDrawer(canvas, opts){
+    opts = opts || {};
+    var ctx = null;
+    try{ ctx = canvas.getContext && canvas.getContext('2d'); }catch(e){ ctx = null; }
+    if(!ctx) return null;
+
+    var fontSize = opts.fontSize || 15;
+    var speed = opts.speed || 1;
+    var color = opts.color || '#3ee08a';
+    var cols, drops, rafId, running = false;
+
+    function resize(){
+      var rect = canvas.getBoundingClientRect();
+      var w = Math.max(1, Math.floor(rect.width));
+      var h = Math.max(1, Math.floor(rect.height));
+      canvas.width = w * (window.devicePixelRatio || 1);
+      canvas.height = h * (window.devicePixelRatio || 1);
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+      cols = Math.max(1, Math.floor(w / fontSize));
+      drops = [];
+      for(var i=0;i<cols;i++) drops.push(Math.floor(Math.random() * -40));
+    }
+
+    function randomGlyph(){
+      if(Math.random() < 0.02){
+        var kw = RAIN_KEYWORDS[Math.floor(Math.random()*RAIN_KEYWORDS.length)];
+        return kw.charAt(Math.floor(Math.random()*kw.length));
+      }
+      return RAIN_CHARS[Math.floor(Math.random()*RAIN_CHARS.length)];
+    }
+
+    function tick(){
+      if(!running) return;
+      var w = canvas.width / (window.devicePixelRatio || 1);
+      var h = canvas.height / (window.devicePixelRatio || 1);
+      ctx.fillStyle = opts.trailColor || 'rgba(2,6,10,0.16)';
+      ctx.fillRect(0, 0, w, h);
+      ctx.font = fontSize + 'px monospace';
+      for(var i=0;i<cols;i++){
+        var text = randomGlyph();
+        var x = i * fontSize;
+        var y = drops[i] * fontSize;
+        ctx.fillStyle = (Math.random() < 0.08) ? '#eafff5' : color;
+        ctx.fillText(text, x, y);
+        if(y > h && Math.random() > 0.975){ drops[i] = 0; }
+        drops[i] += speed;
+      }
+      rafId = requestAnimationFrame(tick);
+    }
+
+    return {
+      start: function(){ resize(); running = true; rafId = requestAnimationFrame(tick); },
+      stop: function(){ running = false; if(rafId) cancelAnimationFrame(rafId); },
+      resize: resize
+    };
+  }
+
+  var intrusionDrawer = makeRainDrawer(matrixCanvas, { fontSize:16, speed:1.1, color:'#3ee08a' });
+  var menuDrawer = makeRainDrawer(menuMatrixCanvas, { fontSize:14, speed:.55, color:'#1f7a68', trailColor:'rgba(6,10,16,0.10)' });
+
+  function playMatrixIntrusion(kind, callback){
+    var data = HACK_CONTENT[kind];
+    matrixCaption.className = 'matrix-caption ' + (data ? data.captionClass : '');
+    matrixCaption.textContent = data ? data.captionText : 'processando...';
+    matrixOverlay.classList.add('show');
+    if(intrusionDrawer) intrusionDrawer.start();
+
+    setTimeout(function(){
+      matrixOverlay.classList.remove('show');
+      if(intrusionDrawer) intrusionDrawer.stop();
+      callback();
+    }, 1700);
+  }
+
+  function startMenuRain(){
+    if(menuDrawer) menuDrawer.start();
+  }
+  function stopMenuRain(){
+    if(menuDrawer) menuDrawer.stop();
+  }
+
+  window.addEventListener('resize', function(){
+    if(intrusionDrawer) intrusionDrawer.resize();
+    if(menuDrawer) menuDrawer.resize();
+  });
+
+  startMenuRain();
+
+  /* =========================================================
+     WIRING UI
+  ========================================================= */
+  $('btn-start').addEventListener('click', function(){
+    var saved = loadSavedPlayerName();
+    $('input-first-name').value = saved.first || '';
+    $('input-last-name').value = saved.last || '';
+    $('name-error').classList.remove('show');
+    showModal('name');
+    setTimeout(function(){
+      var target = saved.first ? $('input-last-name') : $('input-first-name');
+      target.focus();
+    }, 60);
+  });
+
+  function confirmNameAndStart(){
+    var first = $('input-first-name').value.trim();
+    var last = $('input-last-name').value.trim();
+    if(!first || !last){
+      $('name-error').classList.add('show');
+      return;
+    }
+    $('name-error').classList.remove('show');
+    savePlayerNameForNextTime(first, last);
+    state.playerName = first + ' ' + last;
+    state.playerFirst = first;
+    state.playerLast = last;
+    hideModals();
+    startGame();
+  }
+  $('btn-name-confirm').addEventListener('click', confirmNameAndStart);
+  $('btn-name-cancel').addEventListener('click', hideModals);
+  ['input-first-name', 'input-last-name'].forEach(function(id){
+    $(id).addEventListener('keydown', function(e){
+      if(e.key === 'Enter'){ e.preventDefault(); confirmNameAndStart(); }
+    });
+    $(id).addEventListener('input', function(){ $('name-error').classList.remove('show'); });
+  });
+
+  $('btn-history').addEventListener('click', function(){
+    renderHistory();
+    showModal('history');
+  });
+  $('btn-history-close').addEventListener('click', function(){
+    // se o histórico foi aberto a partir da tela de vitória, o labirinto
+    // já está finalizado atrás do modal — fechar precisa mandar pro menu,
+    // não deixar o jogador "preso" numa partida que já acabou.
+    if(state.finished && screenGame.classList.contains('active')){
+      backToMenu();
+    } else {
+      hideModals();
+    }
+  });
+
+  $('btn-howto').addEventListener('click', function(){ showModal('howto'); });
+  $('btn-howto-close').addEventListener('click', hideModals);
+
+  $('btn-sign-ok').addEventListener('click', function(){
+    hideModals();
+    resumeTimer(); // só agora o cronômetro volta a contar de verdade
+  });
+
+  $('btn-pause').addEventListener('click', function(){
+    // não deixa abrir a pausa manual durante uma invasão (chuva + pop-up de DDL já
+    // pausam o cronômetro sozinhos, e abrir outro modal por cima travaria o jogo)
+    if(!state.running || state.finished || state.locked) return;
+    pauseTimer();
+    showModal('pause');
+  });
+  $('btn-resume').addEventListener('click', function(){
+    resumeTimer();
+    hideModals();
+  });
+  $('btn-pause-menu').addEventListener('click', function(){
+    resumeTimer();
+    backToMenu();
+  });
+
+  $('btn-victory-history').addEventListener('click', function(){
+    renderHistory();
+    showModal('history');
+  });
+  $('btn-victory-menu').addEventListener('click', backToMenu);
+
+  /* prevent context menu / long-press artifacts on dpad */
+  document.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+
+})();
+</script>
+</body>
+</html>

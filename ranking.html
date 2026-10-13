@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Classificação · Fuga do Labirinto</title>
+<style>
+  body{ font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:#060a10; color:#dbe7f0; margin:0; padding:24px; }
+  h1{ margin:0 0 4px; }
+  #msg{ color:#7d93a6; margin:0 0 16px; }
+  #login{ display:flex; gap:8px; margin-bottom:16px; }
+  input,button{ font-size:16px; padding:10px 12px; border-radius:8px; border:1px solid #1c2b3a; background:#101a26; color:#dbe7f0; }
+  button{ cursor:pointer; }
+  table{ width:100%; border-collapse:collapse; font-size:clamp(16px,2.2vw,28px); }
+  th,td{ padding:10px 14px; text-align:left; border-bottom:1px solid #1c2b3a; }
+  th{ color:#2fe6d6; }
+  td.pos{ width:3em; font-weight:700; }
+  td.tempo{ font-family:ui-monospace,Menlo,Consolas,monospace; }
+  tr.podio td{ background:rgba(255,180,84,.16); font-weight:700; }
+  tr.top20 td{ background:rgba(47,230,214,.07); }
+  .alerta{ color:#ff5470; font-size:.6em; font-weight:700; }
+</style>
+</head>
+<body>
+<h1>🏆 Classificação</h1>
+<p id="msg">Digite a senha do organizador.</p>
+<div id="login">
+  <input id="senha" type="password" placeholder="Senha" autocomplete="off">
+  <button id="entrar">Entrar</button>
+</div>
+<table id="tabela" hidden>
+  <thead><tr><th>#</th><th>Nome</th><th>Tempo</th><th></th></tr></thead>
+  <tbody id="corpo"></tbody>
+</table>
+
+<script>
+var SUPABASE_URL = 'https://akwubpvhqygscnhxefmb.supabase.co';
+var SUPABASE_KEY = 'sb_publishable_QDek-fF7oQXhAcJ1D8WAWQ_g2EIHOnq';
+var ATUALIZAR_A_CADA_MS = 5000;
+
+var senhaAtual = '';
+var timer = null;
+
+function $(id){ return document.getElementById(id); }
+function msg(t){ $('msg').textContent = t; }
+
+function desenhar(linhas){
+  var corpo = $('corpo');
+  corpo.innerHTML = '';
+  linhas.forEach(function(l){
+    var tr = document.createElement('tr');
+    if(l.posicao <= 3) tr.className = 'podio';
+    else if(l.posicao <= 20) tr.className = 'top20';
+
+    var tdPos = document.createElement('td'); tdPos.className = 'pos'; tdPos.textContent = l.posicao;
+    var tdNome = document.createElement('td'); tdNome.textContent = l.nome + ' ' + l.sobrenome;   // textContent: seguro contra HTML malicioso
+    var tdTempo = document.createElement('td'); tdTempo.className = 'tempo'; tdTempo.textContent = l.tempo;
+    var tdAlerta = document.createElement('td');
+    if(l.alerta){ var s = document.createElement('span'); s.className = 'alerta'; s.textContent = l.alerta; tdAlerta.appendChild(s); }
+
+    tr.appendChild(tdPos); tr.appendChild(tdNome); tr.appendChild(tdTempo); tr.appendChild(tdAlerta);
+    corpo.appendChild(tr);
+  });
+  $('tabela').hidden = false;
+}
+
+function carregar(){
+  fetch(SUPABASE_URL + '/rest/v1/rpc/consultar_ranking', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+    body: JSON.stringify({ p_senha: senhaAtual })
+  }).then(function(res){
+    if(res.status === 403) throw new Error('senha');
+    if(!res.ok) throw new Error('http ' + res.status);
+    return res.json();
+  }).then(function(linhas){
+    $('login').hidden = true;
+    desenhar(linhas);
+    msg('Atualizado às ' + new Date().toLocaleTimeString('pt-BR') + ' · ' + linhas.length + ' jogador(es)');
+  }).catch(function(e){
+    if(e.message === 'senha'){
+      clearInterval(timer); timer = null;
+      $('login').hidden = false; $('tabela').hidden = true;
+      msg('Senha incorreta. Tente de novo.');
+    } else {
+      msg('Sem conexão com o servidor. Tentando de novo...');
+    }
+  });
+}
+
+function entrar(){
+  senhaAtual = $('senha').value;
+  clearInterval(timer);
+  carregar();
+  timer = setInterval(carregar, ATUALIZAR_A_CADA_MS);
+}
+$('entrar').addEventListener('click', entrar);
+$('senha').addEventListener('keydown', function(e){ if(e.key === 'Enter') entrar(); });
+</script>
+</body>
+</html>
