@@ -112,14 +112,23 @@ O jogo coleta **nome, sobrenome, tempo** e um identificador anônimo do aparelho
 ## 👥 Equipe - Usuário no GitHub
 
 Albert dos Santos Mariano
+
 Alessandra Guimarães da Silva
+
 Alison Belen Condori Mayta
+
 Davi Pereira de Oliveira Silva
+
 Ellen Cristina Soares de Jesus 
+
 Giovana Moura Alves da Silva
+
 João Pedro Theodoro de Sousa Andrade
+
 Petterson Michel Lima Aguilar
+
 Samuel Carmoni de Oliveira
+
 Samuel Guimarães da Silva
 
 *Trabalho acadêmico · Modelagem de Banco de Dados · Geração e Implementação de Scripts DDL*
