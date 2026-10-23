@@ -17,7 +17,7 @@ O jogo é feito em **HTML, CSS e JavaScript puros**, sem frameworks. Ao terminar
 
 ## 🎮 Como Jogar
 
-[![Play](https://img.shields.io/badge/▶️_PLAY-DDL_Fuga_do_Labirinto-2fe6d6?style=for-the-badge)](https://samuel-guimaraes345.github.io/NOME-DO-REPOSITORIO/)
+[![Play](https://img.shields.io/badge/▶️_PLAY-DDL_Fuga_do_Labirinto-2fe6d6?style=for-the-badge)](https://samuel-guimaraes345.github.io/DDL-Fuga-do-labirinto/)
 
 1. Escaneie o **QR Code** (ou clique no botão acima) e toque em **Iniciar Jogo**.
 2. Digite seu **nome e sobrenome verdadeiros**.
